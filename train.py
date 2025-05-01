@@ -72,7 +72,7 @@ if __name__ == '__main__':
             print("({} {:10}) acc: {:.1f}; ap: {:.1f}".format(v_id, val, acc*100, ap*100))
         print("({} {:10}) acc: {:.1f}; ap: {:.1f}".format(v_id+1,'Mean', np.array(accs).mean()*100, np.array(aps).mean()*100));print('*'*25) 
         print(time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()))
-    # model.eval();testmodel();
+    model.eval();testmodel();
     model.train()
     print(f'cwd: {os.getcwd()}')
     for epoch in range(opt.niter):
@@ -103,7 +103,7 @@ if __name__ == '__main__':
         val_writer.add_scalar('accuracy', acc, model.total_steps)
         val_writer.add_scalar('ap', ap, model.total_steps)
         print("(Val @ epoch {}) acc: {}; ap: {}".format(epoch, acc, ap))
-        # testmodel()
+        testmodel()
         model.train()
 
     model.eval();testmodel()
