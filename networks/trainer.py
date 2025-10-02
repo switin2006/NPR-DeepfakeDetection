@@ -14,26 +14,29 @@ class Trainer(BaseModel):
 
         if self.isTrain and not opt.continue_train:
             self.model = resnet50(pretrained=False, num_classes=1)
-
         if not self.isTrain or opt.continue_train:
-            self.model = resnet50(num_classes=1)
+            self.model = resnet50(num_classes=1) # Always create the model architecture=
+            if opt.continue_train:
+                self.load_networks(opt.epoch)
+            elif not self.isTrain and opt.resume:
+                print("Trainer: Skipping default network loading; model will be loaded manually from --resume path.")
+            elif not self.isTrain and not opt.resume:
+                self.load_networks(opt.epoch)
 
         if self.isTrain:
             self.loss_fn = nn.BCEWithLogitsLoss()
             # initialize optimizers
             if opt.optim == 'adam':
                 self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()),
-                                                  lr=opt.lr, betas=(opt.beta1, 0.999))
+                                                    lr=opt.lr, betas=(opt.beta1, 0.999))
             elif opt.optim == 'sgd':
                 self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
-                                                 lr=opt.lr, momentum=0.0, weight_decay=0)
+                                                    lr=opt.lr, momentum=0.0, weight_decay=0)
             else:
                 raise ValueError("optim should be [adam, sgd]")
 
-        if not self.isTrain or opt.continue_train:
-            self.load_networks(opt.epoch)
         self.model.to(opt.gpu_ids[0])
- 
+    
 
     def adjust_learning_rate(self, min_lr=1e-6):
         for param_group in self.optimizer.param_groups:
