@@ -1,10 +1,13 @@
 from .base_options import BaseOptions
 
- 
+
 class TrainOptions(BaseOptions):
     def initialize(self, parser):
         parser = BaseOptions.initialize(self, parser)
-        parser.add_argument('--earlystop_epoch', type=int, default=15)
+        
+        # --- CORRECTED LINE ---
+        parser.add_argument('--earlystop_epoch', type=int, default=15, help='number of epochs to wait for validation metrics to improve before early stopping')
+        
         parser.add_argument('--data_aug', action='store_true', help='if specified, perform additional data augmentation (photometric, blurring, jpegging)')
         parser.add_argument('--optim', type=str, default='adam', help='optim to use [sgd, adam]')
         parser.add_argument('--new_optim', action='store_true', help='new optimizer instead of loading the optim state')
@@ -19,8 +22,5 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--niter', type=int, default=1000, help='# of iter at starting learning rate')
         parser.add_argument('--beta1', type=float, default=0.9, help='momentum term of adam')
         parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate for adam')
-        # parser.add_argument('--model_path')
-        # parser.add_argument('--no_resize', action='store_true')
-        # parser.add_argument('--no_crop', action='store_true')
         self.isTrain = True
         return parser
