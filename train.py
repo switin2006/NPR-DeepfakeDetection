@@ -1,4 +1,4 @@
-# This is the new, complete train.py adapted for CIFAKE with tqdm
+# This is the new, complete train.py with tqdm, best model saving, and early stopping
 
 import os
 import sys
@@ -12,7 +12,7 @@ from data import create_dataloader
 from networks.trainer import Trainer
 from options.train_options import TrainOptions
 import random
-from tqdm import tqdm # <--- IMPORT TQDM
+from tqdm import tqdm
 
 def seed_torch(seed=1029):
     random.seed(seed)
@@ -58,21 +58,25 @@ if __name__ == '__main__':
     
     model = Trainer(opt)
     
+    # ==========================================================================================
+    # INITIALIZE FOR BEST MODEL SAVING AND EARLY STOPPING
+    # ==========================================================================================
+    best_val_acc = -1.0 # Initialize with a low value for AP
+    patience_counter = 0
+    # ==========================================================================================
+
     print(f'Starting training for {opt.niter} epochs...')
     for epoch in range(opt.niter):
         epoch_start_time = time.time()
         
-        # ==========================================================================================
-        # WRAP THE DATA LOADER WITH TQDM
-        # ==========================================================================================
         # --- TRAINING LOOP ---
+        model.train() # Ensure model is in training mode
         for i, data in enumerate(tqdm(data_loader, desc=f"Epoch {epoch+1}/{opt.niter} [Train]")):
             model.total_steps += 1
             model.set_input(data)
             model.optimize_parameters()
 
             if model.total_steps % opt.loss_freq == 0:
-                # This print statement is fine, but tqdm will handle the main progress
                 train_writer.add_scalar('loss', model.loss, model.total_steps)
         
         # --- Learning Rate Schedule ---
@@ -81,20 +85,36 @@ if __name__ == '__main__':
             model.adjust_learning_rate()
             
         # ==========================================================================================
-        # VALIDATION AFTER EVERY EPOCH
+        # VALIDATION AFTER EVERY EPOCH + BEST MODEL SAVING + EARLY STOPPING
         # ==========================================================================================
         print(f'--- Running validation for epoch {epoch+1} ---')
-        model.eval() # Set model to evaluation mode
+        model.eval() # Set model to evaluation mode for validation
         
-        # The validate function from validate.py is called here
-        acc, ap = validate(model.model, val_opt)[:2]
+  
+        acc, ap, auc, _, _, precision, f1_score = validate(model.model, val_opt)
         
         val_writer.add_scalar('accuracy', acc, model.total_steps)
         val_writer.add_scalar('ap', ap, model.total_steps)
+        val_writer.add_scalar('precision', precision, model.total_steps)
+        val_writer.add_scalar('f1_score', f1_score, model.total_steps)
         
-        print(f"(Val @ epoch {epoch+1}) Accuracy: {acc:.4f}; AP: {ap:.4f}")
+        print(f"(Val @ epoch {epoch+1}) Acc: {acc:.4f} | AP: {ap:.4f} | Precision: {precision:.4f} | F1: {f1_score:.4f}")
         
-        model.train() # Set model back to training mode
+        # Check if current validation AP is the best so far
+        if acc > best_val_acc:
+            print(f"Validation AP improved from {best_val_acc:.4f} to {acc:.4f}. Saving best model.")
+            best_val_ap = acc
+            model.save_networks('best') # Save model with 'best' tag
+            patience_counter = 0 # Reset patience counter
+        else:
+            patience_counter += 1
+            print(f"Validation AP did not improve. Patience counter: {patience_counter}/{opt.earlystop_epoch}")
+
+        # Check for early stopping
+        if patience_counter >= opt.earlystop_epoch:
+            print(f"Early stopping triggered after {opt.earlystop_epoch} epochs without improvement.")
+            break # Exit the training loop
+            
         # ==========================================================================================
 
     # --- FINAL ACTIONS ---
