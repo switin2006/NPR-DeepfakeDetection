@@ -6,7 +6,7 @@ class TrainOptions(BaseOptions):
         parser = BaseOptions.initialize(self, parser)
         
         # --- CORRECTED LINE ---
-        parser.add_argument('--earlystop_epoch', type=int, default=15, help='number of epochs to wait for validation metrics to improve before early stopping')
+        parser.add_argument('--earlystop_epoch', type=int, default=10, help='number of epochs to wait for validation metrics to improve before early stopping')
         
         parser.add_argument('--data_aug', action='store_true', help='if specified, perform additional data augmentation (photometric, blurring, jpegging)')
         parser.add_argument('--optim', type=str, default='adam', help='optim to use [sgd, adam]')
