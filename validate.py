@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
 from tqdm import tqdm
@@ -11,25 +12,29 @@ def validate(model, opt):
     # Create the data loader using the provided options
     data_loader = create_dataloader(opt)
     
+    # --- Initialize loss function and accumulators ---
+    loss_fn = nn.BCEWithLogitsLoss()
+    total_val_loss = 0.0
     y_true, y_pred = [], []
     
     with torch.no_grad(): # Disable gradient calculation for efficiency
         for i, data in enumerate(tqdm(data_loader, desc="Validating")):
-            # ==========================================================================================
-            # --- FIX: Unpack data as a tuple (image, label) instead of a dictionary ---
-            # ==========================================================================================
+            # --- Correctly unpack data as a tuple (image, label) ---
             img_batch, label_batch = data
-            img_batch = img_batch.cuda() # Move image to GPU
+            img_batch = img_batch.cuda()
+            label_batch = label_batch.cuda().float() # Ensure label is float for loss
 
             # Pass the image batch directly through the model
             output_logits = model(img_batch)
-            # ==========================================================================================
             
-            # Convert predictions to probabilities using sigmoid
-            probs = torch.sigmoid(output_logits).squeeze().cpu().detach().numpy()
-            labels = label_batch.cpu().detach().numpy()
+            # --- Calculate and accumulate validation loss ---
+            loss = loss_fn(output_logits.squeeze(1), label_batch)
+            total_val_loss += loss.item() * img_batch.size(0)
+            
+            # --- Accumulate predictions and labels for other metrics ---
+            probs = torch.sigmoid(output_logits).squeeze().cpu().numpy()
+            labels = label_batch.cpu().numpy()
 
-            # Handle cases where the batch size is 1, so probs is not an array
             if probs.ndim == 0:
                 y_pred.append(probs)
             else:
@@ -41,11 +46,13 @@ def validate(model, opt):
                 y_true.extend(labels)
 
     y_true, y_pred = np.array(y_true), np.array(y_pred)
+    
+    # --- Calculate the final average validation loss for the epoch ---
+    avg_val_loss = total_val_loss / len(data_loader.dataset)
 
-    # --- METRIC CALCULATIONS (UNCHANGED) ---
+    # --- METRIC CALCULATIONS ---
     ap = average_precision_score(y_true, y_pred)
     auc = roc_auc_score(y_true, y_pred)
-    
     preds = (y_pred > 0.5).astype(int)
     acc = np.mean(y_true == preds)
     
@@ -58,4 +65,5 @@ def validate(model, opt):
     recall = tp / (tp + fn + epsilon)
     f1_score = 2 * (precision * recall) / (precision + recall + epsilon)
 
-    return acc, ap, auc, y_true, y_pred, precision, f1_score
+    # --- RETURN THE 6 EXPECTED VALUES IN THE CORRECT ORDER ---
+    return acc, ap, auc, precision, f1_score, avg_val_loss
