@@ -103,7 +103,7 @@ if __name__ == '__main__':
         # Check if current validation AP is the best so far
         if acc > best_val_acc:
             print(f"Validation AP improved from {best_val_acc:.4f} to {acc:.4f}. Saving best model.")
-            best_val_ap = acc
+            best_val_acc = acc
             model.save_networks('best') # Save model with 'best' tag
             patience_counter = 0 # Reset patience counter
         else:
