@@ -46,7 +46,7 @@ if __name__ == '__main__':
     model.eval() # Ensure model is in evaluation mode
     
     # Call validate function
-    acc, ap, auc, _, _, precision, f1_score = validate(model.model, opt)
+    acc, ap, auc, precision, f1_score, val_loss = validate(model.model, opt)
 
     print('*' * 35)
     print(f"Evaluation Results for CIFAKE Test Set:")
