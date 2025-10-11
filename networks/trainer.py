@@ -35,7 +35,7 @@ class Trainer(BaseModel):
             else:
                 raise ValueError("optim should be [adam, sgd]")
 
-        self.model.to(opt.gpu_ids[0])
+        self.model.to(self.device)
     
 
     def adjust_learning_rate(self, min_lr=1e-6):
@@ -66,4 +66,6 @@ class Trainer(BaseModel):
         self.optimizer.zero_grad()
         self.loss.backward()
         self.optimizer.step()
+
+
 
