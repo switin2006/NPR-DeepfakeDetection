@@ -1,28 +1,20 @@
 import torch
-import torchvision.transforms as transforms
 from PIL import Image
-from options.test_options import TestOptions
-from networks.trainer import Trainer
+import torchvision.transforms as transforms
+import argparse
 import os
+from networks.trainer import Trainer
+from options.test_options import TestOptions
 
+# opt is now passed as an argument, which is crucial
 def preprocess_image(image_path, opt):
-    """
-    Loads and preprocesses a single image.
-
-    Args:
-        image_path (str): The path to the image file.
-        opt (object): The options object containing preprocessing parameters.
-
-    Returns:
-        torch.Tensor: The preprocessed image tensor.
-    """
     try:
         image = Image.open(image_path).convert('RGB')
     except IOError:
         print(f"Error: Cannot open image file {image_path}")
         return None
-
-    # Define the image transformations based on the training script
+    
+    # This now uses the CORRECT loadSize and cropSize from the command line
     transform = transforms.Compose([
         transforms.Resize((opt.loadSize, opt.loadSize)),
         transforms.CenterCrop(opt.cropSize),
@@ -30,51 +22,58 @@ def preprocess_image(image_path, opt):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    # Apply the transformations and add a batch dimension
     return transform(image).unsqueeze(0)
 
-def main():
-    """
-    Main function to run the inference on a single image.
-    """
-    # --- 1. Parse Options and Load Model ---
-    opt = TestOptions().parse()
-    opt.isTrain = False
-
-    # Load the model structure
-    model = Trainer(opt)
+def predict_single_image(model, image_path, opt): # opt is also passed here
     model.eval()
+    device = next(model.parameters()).device # Get device directly from model
 
-    # Load the trained weights
-    if not os.path.exists(opt.resume):
-        raise FileNotFoundError(f"FATAL: The specified model path does not exist: {opt.resume}")
-
-    state_dict = torch.load(opt.resume, map_location=model.device)
-    model.model.load_state_dict(state_dict)
-    print(f"--- Model loaded from: {opt.resume} ---")
-
-    # --- 2. Get Image Path and Preprocess ---
-    # Replace 'path/to/your/image.jpg' with the actual path to your image
-    image_path = 'path/to/your/image.jpg'
+    # Pass opt to the preprocessing function
     image_tensor = preprocess_image(image_path, opt)
+    if image_tensor is None:
+        return
 
-    if image_tensor is not None:
-        # Move the tensor to the appropriate device (CPU or GPU)
-        image_tensor = image_tensor.to(model.device)
+    image_tensor = image_tensor.to(device)
 
-        # --- 3. Perform Inference ---
-        with torch.no_grad():
-            output = model.model(image_tensor)
-            # Apply sigmoid to get a probability
-            prob = torch.sigmoid(output).item()
-            # Classify as "Fake" if probability > 0.5, otherwise "Real"
-            prediction = "Fake" if prob > 0.5 else "Real"
+    with torch.no_grad():
+        output_logits = model(image_tensor)
+        prob = torch.sigmoid(output_logits).item()
+        prediction = "Fake" if prob > 0.5 else "Real"
 
-        # --- 4. Display the Result ---
-        print(f"\n--- Inference Result ---")
-        print(f"Image: {os.path.basename(image_path)}")
-        print(f"Prediction: {prediction} (Probability: {prob:.4f})")
-        print("------------------------")
+    print(f"\n--- Prediction ---")
+    print(f"Image:      {os.path.basename(image_path)}")
+    print(f"Prediction: {prediction}")
+    print(f"Confidence of fake: {prob:.4f}")
+    print("-----------------")
+    return prediction, prob
 
 if __name__ == '__main__':
-    main()
+    # --- THIS IS THE CORRECTED LOGIC ---
+    # 1. Initialize TestOptions to get the full parser
+    test_options = TestOptions()
+    parser = test_options.initialize(argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter))
+    
+    # 2. Add your custom argument
+    parser.add_argument('--image_path', type=str, required=True, help='path to the input image')
+    
+    # 3. Parse ALL arguments at once
+    opt = parser.parse_args()
+    opt.isTrain = False
+
+    # --- Load model ---
+    # Make sure you have made the one-line fix in networks/trainer.py
+    model_trainer = Trainer(opt)
+    device = model_trainer.device # Use the device from the trainer
+    model_trainer.model.to(device)
+    model_trainer.model.eval()
+
+    if not os.path.exists(opt.resume):
+        raise FileNotFoundError(f"Model weights not found: {opt.resume}")
+    
+    state_dict = torch.load(opt.resume, map_location=device)
+    model_trainer.model.load_state_dict(state_dict)
+    print(f"Model loaded from: {opt.resume}")
+
+    # --- Predict ---
+    # Pass the fully loaded 'opt' to the prediction function
+    predict_single_image(model_trainer.model, opt.image_path, opt)
